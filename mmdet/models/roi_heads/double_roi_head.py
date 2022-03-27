@@ -25,10 +25,12 @@ class DoubleHeadRoIHead(StandardRoIHead):
         if self.with_shared_head:
             bbox_cls_feats = self.shared_head(bbox_cls_feats)
             bbox_reg_feats = self.shared_head(bbox_reg_feats)
-        cls_score, bbox_pred = self.bbox_head(bbox_cls_feats, bbox_reg_feats)
+        fc_cls_score, fc_bbox_pred, conv_cls_score, conv_bbox_pred = self.bbox_head(bbox_cls_feats, bbox_reg_feats)
 
         bbox_results = dict(
-            cls_score=cls_score,
-            bbox_pred=bbox_pred,
+            fc_cls_score=fc_cls_score,
+            fc_bbox_pred=fc_bbox_pred,
+            conv_cls_score=conv_cls_score,
+            conv_bbox_pred=conv_bbox_pred,
             bbox_feats=bbox_cls_feats)
         return bbox_results
