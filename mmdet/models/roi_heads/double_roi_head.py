@@ -27,6 +27,15 @@ class DoubleHeadRoIHead(StandardRoIHead):
             bbox_reg_feats = self.shared_head(bbox_reg_feats)
         fc_cls_score, fc_bbox_pred, conv_cls_score, conv_bbox_pred = self.bbox_head(bbox_cls_feats, bbox_reg_feats)
 
+        if not self.training:
+            # Complementary Fusion of Classifiers
+            cls_score = 1 - (1 - conv_cls_score) * (1 - fc_cls_score)
+            bbox_results = dict(
+                cls_score=cls_score,
+                bbox_pred=conv_bbox_pred,
+                bbox_feats=bbox_cls_feats)
+            return bbox_results
+
         bbox_results = dict(
             fc_cls_score=fc_cls_score,
             fc_bbox_pred=fc_bbox_pred,
