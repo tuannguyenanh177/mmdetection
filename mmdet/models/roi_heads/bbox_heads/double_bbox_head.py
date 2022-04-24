@@ -1,6 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import torch.nn as nn
-from mmcv.cnn import ConvModule
+from mmcv.cnn import ConvModule, build_norm_layer
 from mmcv.runner import BaseModule, ModuleList
 
 from mmdet.models.backbones.resnet import Bottleneck
@@ -61,15 +61,24 @@ class BasicResBlock(BaseModule):
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
+        print(f'1 {x.size()}')
         identity = x
 
         x = self.conv1(x)
+        print(f'2 {x.size()}')
         x = self.conv2(x)
+        print(f'3 {x.size()}')
 
+        print(f'4 {identity.size()}')
         identity = self.conv_identity(identity)
+        print(f'5 {identity.size()}')
         out = x + identity
 
+        print(f'6 {out.size()}')
+
         out = self.relu(out)
+
+        print(f'7 {out.size()}')
         return out
 
 
@@ -133,8 +142,12 @@ class DoubleConvFCBBoxHead(BBoxHead):
         self.fc_cls = nn.Linear(self.fc_out_channels, self.num_classes + 1)
         self.relu = nn.ReLU(inplace=True)
 
+        _, self.norm = build_norm_layer(dict(type='BN1d'), 1024)
+
     def _add_conv_branch(self):
         """Add the fc branch which consists of a sequential of conv layers."""
+        print(f'conv_cfg {self.conv_cfg}')
+        print(f'norm_cfg {self.norm_cfg}')
         branch_convs = ModuleList()
         for i in range(self.num_convs):
             branch_convs.append(
@@ -158,6 +171,10 @@ class DoubleConvFCBBoxHead(BBoxHead):
     def forward(self, x_cls, x_reg):
         # conv head
         x_conv = self.res_block(x_reg)
+        print(f'size of x_cls {x_cls.size()}, x_reg {x_reg.size()}')
+    
+        fc_1 = self.fc_branch[0]
+        fc_2 = self.fc_branch[1]
 
         for conv in self.conv_branch:
             x_conv = conv(x_conv)
@@ -168,11 +185,21 @@ class DoubleConvFCBBoxHead(BBoxHead):
         x_conv = x_conv.view(x_conv.size(0), -1)
         bbox_pred = self.fc_reg(x_conv)
 
-        # fc head
         x_fc = x_cls.view(x_cls.size(0), -1)
-        for fc in self.fc_branch:
-            x_fc = self.relu(fc(x_fc))
+        x_fc = self.relu(fc_1(x_fc))
+
+        print(f'size of x_fc {x_fc.size()}')
+
+        # fc head
+        x_fc = x_fc + x_conv
+        print(f'size of x_fc 11 {x_fc.size()}')
+        x_fc = self.relu(self.norm(x_fc))
+        x_fc = self.relu(fc_2(x_fc))
+        # for fc in self.fc_branch:
+        #     x_fc = self.relu(fc(x_fc))
 
         cls_score = self.fc_cls(x_fc)
+
+        print(f'size of x_conv {x_conv.size()}, x_fc {x_fc.size()}')
 
         return cls_score, bbox_pred
