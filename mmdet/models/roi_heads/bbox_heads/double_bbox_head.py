@@ -134,12 +134,12 @@ class DoubleConvFCBBoxHead(BBoxHead):
         self.fc_cls = nn.Linear(self.fc_out_channels, self.num_classes + 1)
         self.relu = nn.ReLU(inplace=True)
 
-        _, self.norm = build_norm_layer(dict(type='BN1d'), 1024)
+        _, self.norm1 = build_norm_layer(dict(type='BN1d'), 1024)
+        _, self.norm2 = build_norm_layer(dict(type='BN'), 1024)
+        self.upsample = nn.Upsample(scale_factor=7, mode='nearest')
 
     def _add_conv_branch(self):
         """Add the fc branch which consists of a sequential of conv layers."""
-        print(f'conv_cfg {self.conv_cfg}')
-        print(f'norm_cfg {self.norm_cfg}')
         branch_convs = ModuleList()
         for i in range(self.num_convs):
             branch_convs.append(
@@ -168,30 +168,41 @@ class DoubleConvFCBBoxHead(BBoxHead):
         fc_1 = self.fc_branch[0]
         fc_2 = self.fc_branch[1]
 
-        for conv in self.conv_branch:
+        conv_first_2_branchs = self.conv_branch[:2]
+        conv_last_2_branchs = self.conv_branch[2:]
+
+        for conv in conv_first_2_branchs:
             x_conv = conv(x_conv)
+
+        # print(f'size of x_conv {x_conv.size()}')
 
         if self.with_avg_pool:
             x_conv = self.avg_pool(x_conv)
 
-        x_conv = x_conv.view(x_conv.size(0), -1)
-        bbox_pred = self.fc_reg(x_conv)
-
+        x_conv_to_fc = x_conv.view(x_conv.size(0), -1)
+        
         x_fc = x_cls.view(x_cls.size(0), -1)
         x_fc = self.relu(fc_1(x_fc))
 
-        # print(f'size of x_fc {x_fc.size()}')
+        x_fc_to_conv = x_fc.view(x_fc.size(0), x_fc.size(1), 1, 1)
+        x_fc_to_conv = self.upsample(x_fc_to_conv)
 
-        # fc head
-        x_fc = x_fc + x_conv
-        # print(f'size of x_fc 11 {x_fc.size()}')
-        x_fc = self.relu(self.norm(x_fc))
+        # put conv information to fc_2
+        x_fc = x_fc + x_conv_to_fc
+        x_fc = self.relu(self.norm1(x_fc))
         x_fc = self.relu(fc_2(x_fc))
-        # for fc in self.fc_branch:
-        #     x_fc = self.relu(fc(x_fc))
 
+        # put fc information to last 2 conv branchs
+        x_conv = x_conv + x_fc_to_conv
+        x_conv = self.relu(self.norm2(x_conv))
+        for conv in conv_last_2_branchs:
+            x_conv = conv(x_conv)
+        if self.with_avg_pool:
+            x_conv = self.avg_pool(x_conv)
+
+        x_conv = x_conv.view(x_conv.size(0), -1)
+
+        bbox_pred = self.fc_reg(x_conv)
         cls_score = self.fc_cls(x_fc)
-
-        # print(f'size of x_conv {x_conv.size()}, x_fc {x_fc.size()}')
 
         return cls_score, bbox_pred
