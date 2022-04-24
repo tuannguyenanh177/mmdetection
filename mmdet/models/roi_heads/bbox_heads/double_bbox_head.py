@@ -61,24 +61,16 @@ class BasicResBlock(BaseModule):
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        print(f'1 {x.size()}')
         identity = x
 
         x = self.conv1(x)
-        print(f'2 {x.size()}')
         x = self.conv2(x)
-        print(f'3 {x.size()}')
 
-        print(f'4 {identity.size()}')
         identity = self.conv_identity(identity)
-        print(f'5 {identity.size()}')
         out = x + identity
-
-        print(f'6 {out.size()}')
 
         out = self.relu(out)
 
-        print(f'7 {out.size()}')
         return out
 
 
@@ -171,7 +163,7 @@ class DoubleConvFCBBoxHead(BBoxHead):
     def forward(self, x_cls, x_reg):
         # conv head
         x_conv = self.res_block(x_reg)
-        print(f'size of x_cls {x_cls.size()}, x_reg {x_reg.size()}')
+        # print(f'size of x_cls {x_cls.size()}, x_reg {x_reg.size()}')
     
         fc_1 = self.fc_branch[0]
         fc_2 = self.fc_branch[1]
@@ -188,11 +180,11 @@ class DoubleConvFCBBoxHead(BBoxHead):
         x_fc = x_cls.view(x_cls.size(0), -1)
         x_fc = self.relu(fc_1(x_fc))
 
-        print(f'size of x_fc {x_fc.size()}')
+        # print(f'size of x_fc {x_fc.size()}')
 
         # fc head
         x_fc = x_fc + x_conv
-        print(f'size of x_fc 11 {x_fc.size()}')
+        # print(f'size of x_fc 11 {x_fc.size()}')
         x_fc = self.relu(self.norm(x_fc))
         x_fc = self.relu(fc_2(x_fc))
         # for fc in self.fc_branch:
@@ -200,6 +192,6 @@ class DoubleConvFCBBoxHead(BBoxHead):
 
         cls_score = self.fc_cls(x_fc)
 
-        print(f'size of x_conv {x_conv.size()}, x_fc {x_fc.size()}')
+        # print(f'size of x_conv {x_conv.size()}, x_fc {x_fc.size()}')
 
         return cls_score, bbox_pred
